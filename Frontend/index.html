@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流式输出演示</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .input-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #prompt-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        #submit-btn {
+            padding: 12px 20px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #submit-btn:hover {
+            background-color: #40a9ff;
+        }
+        #submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .output-container {
+            min-height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background-color: #fafafa;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .typing {
+            border-right: 2px solid #1890ff;
+        }
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #1890ff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .status {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+        .settings {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        .settings-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .settings-row label {
+            margin-right: 10px;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .custom-url {
+            margin-top: 8px;
+            display: none;
+        }
+        .custom-url input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI 流式输出演示</h1>
+        
+        <div class="settings">
+            <div class="settings-title">连接设置</div>
+            <div class="settings-row">
+                <label for="connection-mode">请求模式:</label>
+                <select id="connection-mode">
+                    <option value="direct">直接请求 (可能有CORS错误)</option>
+                    <option value="proxy" selected>使用代理服务器 (推荐)</option>
+                    <option value="custom">自定义URL</option>
+                </select>
+            </div>
+            <div class="custom-url" id="custom-url-container">
+                <input type="text" id="custom-url" placeholder="请输入完整的API URL，例如 http://example.com/api">
+                <div class="help-text">确保URL包含完整协议 (http:// 或 https://)</div>
+            </div>
+            <div class="settings-row" style="margin-top: 10px;">
+                <button id="test-btn" style="background-color: #52c41a; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">快速测试</button>
+                <span style="margin-left: 10px; font-size: 12px; color: #888;">点击测试按钮将发送预设问题并显示样例回答</span>
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="prompt-input" placeholder="请输入您的问题..." autocomplete="off">
+            <button id="submit-btn">发送</button>
+        </div>
+        <div class="output-container" id="output">等待您的输入...</div>
+        <div class="status" id="status"></div>
+        
+        <div style="margin-top: 20px; padding: 15px; background-color: #f0f9ff; border: 1px solid #d6e8ff; border-radius: 4px;">
+            <div style="font-weight: bold; margin-bottom: 8px;">🆕 版本更新提示</div>
+            <p>已更新流式输出处理逻辑：</p>
+            <p>1. 移除了 <code>data:</code> 前缀，使输出更加清晰</p>
+            <p>2. 去除了内容之间多余的空格，保持原始格式</p>
+            <p>3. 优化了测试按钮功能，现在会发送预设问题并显示正确回答</p>
+            <p>您可以点击上方的<b>测试星辰科技AI应用</b>按钮来验证更新效果。</p>
+            <p>如果您仍然看到格式问题，请尝试清除浏览器缓存后重新加载页面。</p>
+        </div>
+    </div>
+
+    <script>
+        const promptInput = document.getElementById('prompt-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+        const connectionMode = document.getElementById('connection-mode');
+        const customUrlContainer = document.getElementById('custom-url-container');
+        const customUrl = document.getElementById('custom-url');
+        const testBtn = document.getElementById('test-btn');
+        
+        // 显示/隐藏自定义URL输入框
+        connectionMode.addEventListener('change', () => {
+            if (connectionMode.value === 'custom') {
+                customUrlContainer.style.display = 'block';
+            } else {
+                customUrlContainer.style.display = 'none';
+            }
+        });
+        
+        // 从URL中获取prompt参数
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const promptParam = urlParams.get('prompt');
+            
+            if (promptParam) {
+                promptInput.value = promptParam;
+                fetchStreamResponse(promptParam);
+            }
+        });
+
+        // 提交按钮事件
+        submitBtn.addEventListener('click', () => {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                fetchStreamResponse(prompt);
+            }
+        });
+
+        // 输入框回车事件
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const prompt = promptInput.value.trim();
+                if (prompt) {
+                    fetchStreamResponse(prompt);
+                }
+            }
+        });
+
+        // 测试按钮事件
+        testBtn.addEventListener('click', () => {
+            // 使用预设的测试提示词
+            const testPrompt = "星辰科技的人工智能应用有哪些？";
+            promptInput.value = testPrompt;
+            fetchStreamResponse(testPrompt);
+        });
+
+        // 获取当前所选URL
+        function getApiUrl(prompt) {
+            const mode = connectionMode.value;
+            
+            // 自动检测代理服务器地址
+            function getProxyBaseUrl() {
+                // 如果在同一域名下，使用相对路径
+                if (window.location.hostname === 'localhost' && window.location.port === '3000') {
+                    return '/api';
+                }
+                // 否则使用完整的代理地址
+                return 'http://localhost:3000/api';
+            }
+            
+            switch (mode) {
+                case 'direct':
+                    return `http://localhost:8080/?prompt=${encodeURIComponent(prompt)}`;
+                case 'proxy':
+                    // 使用代理服务器，自动检测地址
+                    return `${getProxyBaseUrl()}?prompt=${encodeURIComponent(prompt)}`;
+                case 'custom':
+                    // 使用自定义URL
+                    const baseUrl = customUrl.value.trim();
+                    if (!baseUrl) {
+                        throw new Error('请提供有效的自定义URL');
+                    }
+                    // 检查URL是否已包含问号
+                    const separator = baseUrl.includes('?') ? '&' : '?';
+                    return `${baseUrl}${separator}prompt=${encodeURIComponent(prompt)}`;
+                default:
+                    return `http://localhost:8080/?prompt=${encodeURIComponent(prompt)}`;
+            }
+        }
+
+        async function fetchStreamResponse(prompt) {
+            // 清空输出区域并设置状态
+            output.textContent = '';
+            output.classList.add('typing');
+            status.innerHTML = '正在获取回答<span class="loading"></span>';
+            
+            // 禁用输入和按钮
+            promptInput.disabled = true;
+            submitBtn.disabled = true;
+            connectionMode.disabled = true;
+            customUrl.disabled = true;
+
+            try {
+                // 根据用户选择的模式构建请求URL
+                const url = getApiUrl(prompt);
+                
+                const options = {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/event-stream',
+                    }
+                };
+                
+                // 所有模式都添加CORS设置
+                options.mode = 'cors';
+                options.credentials = 'same-origin';
+                
+                console.log(`发送请求到: ${url}`);
+                // 使用fetch API发送请求
+                const response = await fetch(url, options);
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                // 获取响应的可读流
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                
+                let accumulatedText = '';
+                let buffer = '';
+                
+                // 读取流数据
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        // 处理缓冲区中可能剩余的数据
+                        if (buffer.trim()) {
+                            const processedChunk = processChunk(buffer);
+                            accumulatedText += processedChunk;
+                            output.textContent = accumulatedText;
+                        }
+                        break;
+                    }
+                    
+                    // 解码接收的数据块
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    
+                    // 处理完整的SSE消息（以双换行符分隔）
+                    let parts = buffer.split('\n\n');
+                    buffer = parts.pop() || ''; // 保留最后一个不完整的部分
+                    
+                    if (parts.length > 0) {
+                        const processedData = parts
+                            .map(part => part.trim() ? processChunk(part) : '')
+                            .join('');
+                            
+                        if (processedData) {
+                            accumulatedText += processedData;
+                            // 更新输出区域
+                            output.textContent = accumulatedText;
+                            // 自动滚动到底部
+                            output.scrollTop = output.scrollHeight;
+                        }
+                    }
+                }
+                
+                // 处理数据块，移除SSE前缀
+                function processChunk(text) {
+                    // 移除data:前缀，处理多行数据，不添加额外空格
+                    return text.replace(/^data:/gm, '').trim();
+                }
+                
+                status.textContent = '回答完成';
+            } catch (error) {
+                console.error('获取流式响应出错:', error);
+                
+                // 为不同的错误提供更详细的诊断和解决方案
+                if (error.message.includes('Failed to fetch')) {
+                    output.textContent = `连接错误: 无法连接到服务器\n\n可能的原因:\n1. 代理服务器未运行 - 请运行 node proxy.js\n2. 您当前从 ${window.location.origin} 访问，但尝试连接 http://localhost:3000/\n\n推荐解决方案:\n1. 确保已运行代理服务器 (node proxy.js)\n2. 如果您从不同端口访问，请选择"自定义URL"模式，并输入 http://localhost:3000/api`;
+                    
+                    // 自动切换到自定义URL模式并填入代理服务器地址
+                    if (connectionMode.value === 'proxy') {
+                        connectionMode.value = 'custom';
+                        customUrlContainer.style.display = 'block';
+                        customUrl.value = 'http://localhost:3000/api';
+                    }
+                }
+                else if (connectionMode.value === 'direct') {
+                    output.textContent = `发生CORS错误: ${error.message}\n\n可能的解决方案:\n1. 切换到"使用代理服务器"模式\n2. 确保后端服务启用了CORS（添加Access-Control-Allow-Origin头）\n3. 在同一域名/端口下运行前端和后端`;
+                } else {
+                    output.textContent = `请求错误: ${error.message}\n\n可能的原因:\n1. 服务器未运行或无法访问\n2. URL不正确\n3. 服务器内部错误`;
+                }
+                status.textContent = '请求失败';
+            } finally {
+                // 完成后重新启用输入和按钮
+                promptInput.disabled = false;
+                submitBtn.disabled = false;
+                connectionMode.disabled = false;
+                customUrl.disabled = false;
+                output.classList.remove('typing');
+                promptInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>
